@@ -2,6 +2,7 @@ const SAFE_ERROR_CODES = new Set([
   'provider_not_configured',
   'provider_misconfigured',
   'provider_unavailable',
+  'provider_timeout',
   'provider_invalid_output',
 ])
 
@@ -10,6 +11,9 @@ function safeFailure(code) {
 }
 
 function normalizeSuccess(result) {
+  if (result?.success === false) {
+    return safeFailure(result.safeErrorCode)
+  }
   if (!result || typeof result !== 'object') return safeFailure('provider_invalid_output')
   if (typeof result.providerRequestId !== 'string' || result.providerRequestId.length < 1) {
     return safeFailure('provider_invalid_output')

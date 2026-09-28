@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createImageProvider, validateProviderConfiguration } from './imageProvider.js'
+import { createConfiguredHuggingFaceProvider } from './huggingFaceProvider.js'
 
 const env = {
   AI_IMAGE_PROVIDER: 'injected-test-provider',
@@ -72,5 +73,15 @@ test('malformed provider output fails closed', async () => {
   assert.deepEqual(await provider.generateImage({}), {
     success: false,
     safeErrorCode: 'provider_invalid_output',
+  })
+})
+
+test('non-Hugging Face provider configuration fails closed without selecting an adapter', async () => {
+  const provider = createConfiguredHuggingFaceProvider({
+    env: { get(name) { return name === 'AI_IMAGE_PROVIDER' ? 'other-provider' : 'placeholder-only' } },
+  })
+  assert.deepEqual(await provider.generateImage({ prompt: 'x', model: 'model' }), {
+    success: false,
+    safeErrorCode: 'provider_not_configured',
   })
 })
