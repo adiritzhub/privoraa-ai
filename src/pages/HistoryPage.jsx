@@ -6,8 +6,10 @@ import { Badge, EmptyState, PageHeading } from '../components/Ui.jsx'
 function requestStateLabel(request) {
   if (request.classification === 'prohibited' || request.request_state === 'blocked') return 'Blocked'
   if (request.request_state === 'rejected') return 'Rejected'
-  if (request.request_state === 'pending' && request.classification === 'restricted') return 'Pending approval'
-  if (request.request_state === 'pending') return 'Pending classification'
+  if (request.classification === 'restricted' && ['pending', 'pending_approval'].includes(request.request_state)) return 'Pending approval'
+  if (request.classification === 'allowed' && request.request_state === 'eligible') return 'Policy approved'
+  if (request.request_state === 'pending' || request.request_state === 'pending_classification') return 'Pending classification'
+  if (request.request_state === 'failed') return 'Policy unavailable'
   return request.request_state.replaceAll('_', ' ')
 }
 
@@ -53,7 +55,7 @@ function HistoryPage() {
                   <tr key={request.id}>
                     <td>{request.prompt}</td>
                     <td>{request.category}</td>
-                    <td><Badge tone={request.request_state === 'blocked' || request.request_state === 'rejected' ? 'danger' : request.request_state === 'pending' ? 'warning' : 'neutral'}>{requestStateLabel(request)}</Badge></td>
+                    <td><Badge tone={request.request_state === 'blocked' || request.request_state === 'rejected' || request.request_state === 'failed' ? 'danger' : request.classification === 'restricted' || request.request_state === 'pending' || request.request_state === 'pending_classification' ? 'warning' : 'neutral'}>{requestStateLabel(request)}</Badge></td>
                     <td>{new Date(request.created_at).toLocaleString()}</td>
                   </tr>
                 ))}

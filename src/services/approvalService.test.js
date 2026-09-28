@@ -28,6 +28,7 @@ function createClient({
       const builder = {
         select(columns) { query.columns = columns; return builder },
         eq(field, value) { query.filters.push([field, value]); return builder },
+        in(field, values) { query.filters.push([field, values]); return builder },
         order(field, options) { query.order = [field, options]; return builder },
         async maybeSingle() { return { data: query.table === 'generation_requests' ? request : null, error: null } },
         then(resolve, reject) {
@@ -48,7 +49,7 @@ test('only a trusted active Founder can list pending restricted approvals', asyn
 
   assert.equal(requests.length, 1)
   assert.deepEqual(fake.calls.rpc[0], { name: 'is_current_founder', args: undefined })
-  assert.deepEqual(fake.calls.queries[0].filters, [['classification', 'restricted'], ['request_state', 'pending']])
+  assert.deepEqual(fake.calls.queries[0].filters, [['classification', 'restricted'], ['request_state', ['pending', 'pending_approval']]])
 })
 
 test('unauthenticated or non-Founder callers cannot list approvals', async () => {
@@ -100,6 +101,19 @@ test('review RPC derives reviewer server-side and receives no reviewer id', asyn
     args: { p_request_id: requestId, p_decision: 'rejected', p_reason: 'Outside supported classroom category.' },
   })
   assert.equal('reviewer_id' in fake.calls.rpc.at(-1).args, false)
+})
+
+test('pending approval state remains reviewable while prohibited requests do not', async () => {
+  const fake = createClient({
+    request: { id: requestId, user_id: ownerId, classification: 'restricted', request_state: 'pending_approval' },
+  })
+  const result = await createApprovalService(fake.client).review({ requestId, decision: 'approved' })
+  assert.equal(result.state, 'approved')
+
+  const prohibited = createClient({
+    request: { id: requestId, user_id: ownerId, classification: 'prohibited', request_state: 'blocked' },
+  })
+  await assert.rejects(createApprovalService(prohibited.client).review({ requestId, decision: 'approved' }), { code: 'invalid_request_state' })
 })
 
 test('RPC errors are mapped to safe authorization messages', async () => {

@@ -60,7 +60,7 @@ function GeneratePage() {
       <PageHeading
         eyebrow="IMAGE STUDIO"
         title="Create an image"
-        description="Describe what you want to explore. Requests are securely recorded for policy classification; image generation is not connected yet."
+        description="Describe what you want to explore. Each request is checked by the policy service before any future image-generation step."
       />
       <div className="studio-grid">
         <form className="panel prompt-panel" onSubmit={handleGenerate}>
@@ -108,7 +108,7 @@ function GeneratePage() {
           </fieldset>
 
           <Notice tone="warning">
-            Requests are stored as pending classification. The policy classifier and image model are not connected; no image is generated. Prohibited content must remain blocked and approval cannot override provider safeguards or law.
+            Policy classification runs before generation. The development classifier is deterministic and is not a substitute for production moderation; no image is generated in this release.
           </Notice>
           {categoriesError && <p className="form-status error-status" role="alert">{categoriesError}</p>}
           <button className="button button-primary generate-button" type="submit" disabled={!prompt.trim() || !categoryId || categoriesLoading || busy}>
@@ -138,17 +138,17 @@ function GeneratePage() {
       <section className="panel policy-flow-panel">
         <div className="section-inline-heading"><div><span className="eyebrow">REQUEST SAFETY</span><h2>Policy review</h2></div><span className="subtle-label">Classifier not connected</span></div>
         <div className="policy-flow-grid">
-          <article className="policy-flow-item"><span className="policy-state policy-normal">Normal</span><p>Prompt → classification → automatic generation.</p></article>
-          <article className="policy-flow-item"><span className="policy-state policy-restricted">Restricted</span><p>Prompt → classification → Founder approval queue → approve or reject.</p></article>
+          <article className="policy-flow-item"><span className="policy-state policy-normal">Allowed</span><p>Policy approved → eligible for the future generation stage.</p></article>
+          <article className="policy-flow-item"><span className="policy-state policy-restricted">Restricted</span><p>Additional review required → Founder approval queue → approve or reject.</p></article>
           <article className="policy-flow-item"><span className="policy-state policy-prohibited">Prohibited</span><p>Blocked. Cannot be approved or override provider safeguards or law.</p></article>
         </div>
-        <p className="policy-flow-disclaimer">Requests remain pending until backend classification is available. No prompt is classified or sent to an image model by this frontend.</p>
+        <p className="policy-flow-disclaimer">The backend stores the policy result and controls each state transition. No prompt is sent to an image model by this frontend.</p>
       </section>
 
       <section className="panel recent-panel">
         <div className="section-inline-heading"><div><span className="eyebrow">YOUR WORK</span><h2>Most recent request</h2></div><span className="subtle-label">No generated image</span></div>
         {lastRequest ? (
-          <div className="request-receipt"><span className="badge badge-warning">Pending classification</span><p>{lastRequest.message}</p><small>Request ID: {lastRequest.requestId}</small></div>
+          <div className="request-receipt"><span className={`badge ${lastRequest.classification === 'prohibited' || lastRequest.state === 'failed' ? 'badge-danger' : lastRequest.classification === 'restricted' ? 'badge-warning' : 'badge-success'}`}>{lastRequest.classification === 'prohibited' ? 'Blocked by policy' : lastRequest.classification === 'restricted' ? 'Additional review required' : lastRequest.state === 'failed' ? 'Policy unavailable' : 'Policy approved'}</span><p>{lastRequest.message}</p><small>Request ID: {lastRequest.requestId}</small></div>
         ) : (
           <EmptyState title="No request submitted yet">Submitted requests will appear here with their processing status. Images are not generated in this release.</EmptyState>
         )}

@@ -47,7 +47,7 @@ export function createApprovalService(client = supabase) {
     if (error) throw createApprovalError('service_unavailable')
     if (!request) throw createApprovalError('not_found')
     if (request.user_id === reviewerId) throw createApprovalError('self_review_denied')
-    if (request.classification !== 'restricted' || request.request_state !== 'pending') {
+    if (request.classification !== 'restricted' || !['pending', 'pending_approval'].includes(request.request_state)) {
       throw createApprovalError('invalid_request_state')
     }
     return request
@@ -60,7 +60,7 @@ export function createApprovalService(client = supabase) {
         .from('generation_requests')
         .select('id, user_id, prompt, category, classification, request_state, created_at')
         .eq('classification', 'restricted')
-        .eq('request_state', 'pending')
+        .in('request_state', ['pending', 'pending_approval'])
         .order('created_at', { ascending: true })
 
       if (error) throw createApprovalError('service_unavailable')

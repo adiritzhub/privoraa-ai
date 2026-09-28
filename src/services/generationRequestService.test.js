@@ -18,6 +18,8 @@ function createClient({
   history = [],
   rpcData = '22222222-2222-4222-8222-222222222222',
   rpcError = null,
+  request = { classification: 'allowed', request_state: 'eligible' },
+  requestError = null,
 } = {}) {
   const calls = { rpc: [], selects: [] }
   return {
@@ -43,6 +45,7 @@ function createClient({
               data: settingsError ? null : { global_generation_enabled: generationEnabled },
               error: settingsError,
             }
+            if (table === 'generation_requests') return { data: request, error: requestError }
             if (table === 'categories') return {
               data: categoryError || filters.enabled !== true ? null : category,
               error: categoryError,
@@ -82,9 +85,10 @@ test('normal and restricted users submit through the trusted RPC without a clien
       p_category_id: validCategoryId,
       p_prompt: 'A classroom diagram of a plant cell',
     })
-    assert.equal(result.state, 'pending_classification')
+    assert.equal(result.classification, 'allowed')
+    assert.equal(result.state, 'eligible')
     assert.equal(result.requestId, '22222222-2222-4222-8222-222222222222')
-    assert.match(result.message, /No image was generated/)
+    assert.match(result.message, /generation system not connected/)
   }
 })
 
@@ -180,5 +184,44 @@ test('authoritative RPC distinguishes generation and category changes without ex
     assert.equal(error.code, 'permission_denied')
     assert.doesNotMatch(error.message, /private authorization detail/)
     return true
+  })
+})
+
+test('persisted restricted and prohibited classifications control the returned workflow state', async () => {
+  const restricted = createClient({ request: { classification: 'restricted', request_state: 'pending_approval' } })
+  const restrictedResult = await createGenerationRequestService(restricted.client).submit({ prompt: 'Prompt', categoryId: validCategoryId })
+  assert.deepEqual(
+    { classification: restrictedResult.classification, state: restrictedResult.state },
+    { classification: 'restricted', state: 'pending_approval' },
+  )
+  assert.match(restrictedResult.message, /Additional review required/)
+
+  const prohibited = createClient({ request: { classification: 'prohibited', request_state: 'blocked' } })
+  const prohibitedResult = await createGenerationRequestService(prohibited.client).submit({ prompt: 'Prompt', categoryId: validCategoryId })
+  assert.deepEqual(
+    { classification: prohibitedResult.classification, state: prohibitedResult.state },
+    { classification: 'prohibited', state: 'blocked' },
+  )
+  assert.equal(prohibitedResult.message, 'Request blocked by policy.')
+})
+
+test('policy lookup failure is fail-closed and caller classification is ignored', async () => {
+  const fake = createClient({ requestError: { code: 'XX000', message: 'private policy detail' } })
+  await assert.rejects(
+    createGenerationRequestService(fake.client).submit({
+      prompt: 'Prompt',
+      categoryId: validCategoryId,
+      classification: 'allowed',
+      requestState: 'eligible',
+    }),
+    (error) => {
+      assert.equal(error.code, 'policy_unavailable')
+      assert.doesNotMatch(error.message, /private policy detail/)
+      return true
+    },
+  )
+  assert.deepEqual(fake.calls.rpc[0].args, {
+    p_category_id: validCategoryId,
+    p_prompt: 'Prompt',
   })
 })

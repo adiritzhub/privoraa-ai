@@ -1,6 +1,6 @@
 # Privoraa AI
 
-Privoraa AI is an educational image studio. The frontend uses Supabase Auth and profile-backed roles, stores generation requests through protected database RPCs, and loads Founder data through Founder-authorized services. Policy classification and image-model generation are not connected yet.
+Privoraa AI is an educational image studio. The frontend uses Supabase Auth and profile-backed roles, stores generation requests through protected database RPCs, and loads Founder data through Founder-authorized services. Policy classification is part of the request flow; image-model generation remains intentionally disabled until Phase 10.
 
 ## Development
 
@@ -38,6 +38,6 @@ Route guards only control frontend navigation. Roles, permission states, approva
 
 ## Integration boundaries
 
-The Generate action sends a prompt and category to `submit_generation_request`, which derives identity from `auth.uid()`, checks the trusted profile, global switch, category, and daily quota, then stores an unclassified pending request. The policy classifier and image model are not connected, so no image is generated and a request remains pending classification. Future handling is normal → classification → generation; restricted → classification → Founder approval/rejection; prohibited → blocked. Founder approval cannot bypass provider safeguards, platform policy, or applicable law. User history is RLS-scoped; Founder reads/writes use database-checked authorization and protected RPCs, not direct client mutation.
+The Generate action sends a prompt and category to `submit_generation_request`, which derives identity from `auth.uid()`, checks the trusted profile, global switch, category, and daily quota, then runs a deterministic development policy classifier inside the protected database flow. Allowed requests become eligible for a future generation stage, restricted requests enter Founder approval, prohibited requests are blocked, and classifier failures fail closed. This deterministic classifier is not a substitute for a production moderation system; real provider/model integration remains a future step. No image is generated in Phase 9. Founder approval cannot bypass provider safeguards, platform policy, or applicable law. User history is RLS-scoped; Founder reads/writes use database-checked authorization and protected RPCs, not direct client mutation.
 
 Demo authentication and prototype data remain available only for explicit development/testing injection; they are not the default UI path. No API keys or secret credentials belong in frontend code.

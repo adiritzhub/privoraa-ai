@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabaseClient.js'
+import { createPolicyService } from './policyService.js'
 
 const categoryIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -10,6 +11,7 @@ const requestMessages = {
   category_unavailable: 'That image category is not currently available.',
   quota_exceeded: 'You have reached the daily image request limit.',
   service_unavailable: 'The request service is unavailable. Please try again later.',
+  policy_unavailable: 'Policy check unavailable — request not processed.',
 }
 
 function createRequestError(code) {
@@ -21,6 +23,7 @@ function createRequestError(code) {
 
 function mapRpcError(error) {
   if (error?.code === 'P0001') return createRequestError('quota_exceeded')
+  if (error?.code === 'P0002') return createRequestError('policy_unavailable')
   if (error?.code === '42501') {
     const message = String(error.message ?? '').toLowerCase()
     if (message.includes('generation is disabled')) return createRequestError('generation_disabled')
@@ -50,7 +53,7 @@ async function requireActiveUser(client) {
   return authData.user.id
 }
 
-export function createGenerationRequestService(client = supabase) {
+export function createGenerationRequestService(client = supabase, policy = createPolicyService(client)) {
   return {
     async listAvailableCategories() {
       if (!client) throw createRequestError('service_unavailable')
@@ -119,10 +122,17 @@ export function createGenerationRequestService(client = supabase) {
       if (rpcError) throw mapRpcError(rpcError)
       if (typeof requestId !== 'string') throw createRequestError('service_unavailable')
 
+      let policyResult
+      try {
+        policyResult = await policy.classifyRequest(requestId)
+      } catch (error) {
+        if (error?.code === 'policy_unavailable') throw error
+        throw createRequestError('policy_unavailable')
+      }
+
       return {
         requestId,
-        state: 'pending_classification',
-        message: 'Request recorded and awaiting policy classification. No image was generated.',
+        ...policyResult,
       }
     },
   }
