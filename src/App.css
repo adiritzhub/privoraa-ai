@@ -1613,6 +1613,14 @@
   padding: 26px;
 }
 
+.auth-loading {
+  display: grid;
+  min-height: 320px;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .auth-panel > .eyebrow {
   margin-bottom: 9px;
 }

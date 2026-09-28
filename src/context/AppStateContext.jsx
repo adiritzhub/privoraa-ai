@@ -1,15 +1,25 @@
 import { useState } from 'react'
 import { AppStateContext } from './appState.js'
 import { prototypeApprovals, prototypeCategories, prototypeUsers } from '../data/prototypeData.js'
+import { useAuth } from '../hooks/useAuth.js'
 
-export function AppStateProvider({ children }) {
-  const [approvals, setApprovals] = useState(prototypeApprovals)
-  const [users, setUsers] = useState(prototypeUsers)
-  const [settings, setSettings] = useState({
+function createInitialSettings() {
+  return {
     generationEnabled: false,
     dailyLimit: 20,
     categories: prototypeCategories.map((name) => ({ name, enabled: true })),
-  })
+  }
+}
+
+export function AppStateProvider({ children }) {
+  const { user } = useAuth()
+  return <SessionAppState key={user?.id ?? 'signed-out'}>{children}</SessionAppState>
+}
+
+function SessionAppState({ children }) {
+  const [approvals, setApprovals] = useState(prototypeApprovals)
+  const [users, setUsers] = useState(prototypeUsers)
+  const [settings, setSettings] = useState(createInitialSettings)
 
   function reviewApproval(id, status) {
     if (!['approved', 'rejected'].includes(status)) return

@@ -46,9 +46,13 @@ function UserMenu() {
   const navigate = useNavigate()
 
   async function handleSignOut() {
-    await signOut()
-    setOpen(false)
-    navigate('/')
+    try {
+      await signOut()
+      setOpen(false)
+      navigate('/')
+    } catch {
+      navigate('/login')
+    }
   }
 
   const initial = user?.displayName?.slice(0, 1).toUpperCase() ?? 'G'

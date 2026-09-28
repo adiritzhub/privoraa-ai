@@ -6,12 +6,23 @@ import { useAuth } from '../hooks/useAuth.js'
 function AuthPage() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, authMode, signIn, register, startFounderPreview } = useAuth()
+  const { user, authMode, supabaseConfiguration, isInitializing, authError, signIn, register, startFounderPreview } = useAuth()
   const isRegister = location.pathname === '/register'
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
 
-  if (user) return <Navigate to={user.role === 'founder' ? '/founder' : '/'} replace />
+  if (isInitializing) {
+    return <div className="auth-loading" role="status">Checking your session…</div>
+  }
+
+  if (user && !busy) {
+    const destination = user.role === 'founder' && user.permissionState === 'normal'
+      ? '/founder'
+      : user.permissionState === 'unknown'
+        ? '/access-denied'
+        : '/'
+    return <Navigate to={destination} replace />
+  }
 
   const destination = location.state?.from
     ? `${location.state.from.pathname}${location.state.from.search ?? ''}`
@@ -19,17 +30,19 @@ function AuthPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    const form = event.currentTarget
     setBusy(true)
     setMessage('')
-    const fields = new FormData(event.currentTarget)
+    const fields = new FormData(form)
     const credentials = Object.fromEntries(fields.entries())
 
     try {
-      if (isRegister) await register({ email: credentials.email, name: credentials.name })
+      if (isRegister) await register({ email: credentials.email, password: credentials.password, name: credentials.name })
       else await signIn({ email: credentials.email, password: credentials.password })
       navigate(destination, { replace: true })
-    } catch {
-      setMessage('The sign-in preview could not be started. Please try again.')
+    } catch (error) {
+      if (error?.code === 'email_confirmation_required') form.reset()
+      setMessage(error?.safe ? error.message : 'Authentication could not be completed. Please try again.')
     } finally {
       setBusy(false)
     }
@@ -60,13 +73,13 @@ function AuthPage() {
         <p className="eyebrow">YOUR WORKSPACE</p>
         <h2>{isRegister ? 'Create your account' : 'Welcome back'}</h2>
         <p className="auth-copy">{isRegister ? 'Start a new learning workspace.' : 'Log in to continue to your workspace.'}</p>
-        <div className="auth-mode-note"><ShieldCheck size={15} aria-hidden="true" /><span>Demo mode. No credentials are sent to a server or stored.</span></div>
+        <div className="auth-mode-note"><ShieldCheck size={15} aria-hidden="true" /><span>{authMode === 'demo' ? `UI-only demo authentication. Supabase public config: ${supabaseConfiguration.status}. No credentials are sent to a server.` : supabaseConfiguration.configured ? 'Supabase Auth is active. Role and permission state are read from the protected database profile.' : `Supabase Auth is unavailable (${supabaseConfiguration.status}). Sign-in fails closed until valid public configuration is supplied.`}</span></div>
         <form className="auth-form" onSubmit={handleSubmit}>
           {isRegister && <label htmlFor="name">Your name<input id="name" name="name" autoComplete="name" required placeholder="Name" /></label>}
           <label htmlFor="email">Email address<span className="input-with-icon"><Mail size={16} aria-hidden="true" /><input id="email" name="email" type="email" autoComplete="email" required placeholder="you@example.com" /></span></label>
           <label htmlFor="password">Password<span className="input-with-icon"><LockKeyhole size={16} aria-hidden="true" /><input id="password" name="password" type="password" autoComplete={isRegister ? 'new-password' : 'current-password'} required minLength={8} placeholder="At least 8 characters" /></span></label>
-          <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? 'Please wait…' : isRegister ? 'Create account preview' : 'Log in to preview'} <ArrowRight size={16} aria-hidden="true" /></button>
-          {message && <p className="form-status" role="status">{message}</p>}
+          <button className="button button-primary auth-submit" type="submit" disabled={busy}>{busy ? isRegister ? 'Creating account…' : 'Signing in…' : isRegister ? 'Create account' : 'Sign in'} <ArrowRight size={16} aria-hidden="true" /></button>
+          {(message || authError) && <p className="form-status" role="status">{message || authError}</p>}
         </form>
         {!isRegister && authMode === 'demo' && (
           <div className="founder-preview-action">

@@ -3,17 +3,19 @@ import { useAuth } from '../hooks/useAuth.js'
 import { canAccessFounderArea, canAccessWorkspace } from '../auth/routeAccess.js'
 
 export function RequireAuthenticated() {
-  const { user } = useAuth()
+  const { user, isInitializing } = useAuth()
   const location = useLocation()
 
+  if (isInitializing) return <div className="auth-loading" role="status">Checking your session…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
   return <Outlet />
 }
 
 export function RequireWorkspaceAccess() {
-  const { user } = useAuth()
+  const { user, isInitializing } = useAuth()
   const location = useLocation()
 
+  if (isInitializing) return <div className="auth-loading" role="status">Checking your session…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
   if (!canAccessWorkspace(user)) {
     const reason = user.permissionState === 'suspended' ? 'suspended' : 'permission'
@@ -23,9 +25,10 @@ export function RequireWorkspaceAccess() {
 }
 
 export function RequireFounder() {
-  const { user } = useAuth()
+  const { user, isInitializing } = useAuth()
   const location = useLocation()
 
+  if (isInitializing) return <div className="auth-loading" role="status">Checking your session…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: location }} />
   if (!canAccessFounderArea(user)) {
     const reason = user.permissionState === 'suspended'

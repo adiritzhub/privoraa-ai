@@ -32,7 +32,7 @@ npm run build
 
 ## Authentication boundary
 
-The app defaults to an injectable `demoAuthAdapter`. Login and registration create volatile in-memory UI sessions; the founder preview button creates a clearly labeled founder demo session without a password. No session or credentials survive refresh, and no credential is sent to a server. `AuthProvider` accepts a replacement adapter for future backend integration.
+The app defaults to an injectable `supabaseAuthAdapter`. Supabase Auth handles email/password registration, sign-in, session restoration, token refresh, and sign-out. Role and permission state are loaded from the user's RLS-protected `profiles` row; missing profile data fails closed. The `demoAuthAdapter` remains available only when explicitly passed to `AuthProvider` for development/testing and is not the default. No Founder role is read from editable user metadata, and access/refresh tokens remain inside the Supabase client rather than the React context.
 
 Route guards only control frontend navigation. Roles, permission states, approvals, and founder actions must be independently authenticated and authorized by the backend before any protected data or operation is exposed.
 
