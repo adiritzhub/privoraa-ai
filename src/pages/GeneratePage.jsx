@@ -1,36 +1,58 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ImagePlus, LockKeyhole, Ratio, Sparkles } from 'lucide-react'
 import { EmptyState, Notice, PageHeading } from '../components/Ui.jsx'
-import { useAuth } from '../hooks/useAuth.js'
-import { useAppState } from '../hooks/useAppState.js'
-import { generationService } from '../services/generationService.js'
-import { policyService } from '../services/policyService.js'
 
-const promptLimit = 600
+const promptLimit = 6000
 const aspectRatios = ['Square', 'Portrait', 'Landscape']
 
 function GeneratePage() {
-  const { user } = useAuth()
-  const { settings } = useAppState()
+  const [categories, setCategories] = useState([])
+  const [categoryId, setCategoryId] = useState('')
+  const [categoriesLoading, setCategoriesLoading] = useState(true)
+  const [categoriesError, setCategoriesError] = useState('')
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState('Square')
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [lastRequest, setLastRequest] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    import('../services/generationRequestService.js')
+      .then(({ generationRequestService }) => generationRequestService.listAvailableCategories())
+      .then((availableCategories) => {
+        if (!active) return
+        setCategories(availableCategories)
+        setCategoryId((current) => current || availableCategories[0]?.id || '')
+      })
+      .catch((error) => {
+        if (active) setCategoriesError(error?.safe ? error.message : 'Categories could not be loaded.')
+      })
+      .finally(() => {
+        if (active) setCategoriesLoading(false)
+      })
+
+    return () => { active = false }
+  }, [])
 
   async function handleGenerate(event) {
     event.preventDefault()
-    const classification = await policyService.classifyPrompt(prompt)
-    if (classification.status !== 'available') {
-      setStatus(generationService.getStatus({
-        permissionState: user.permissionState,
-        generationEnabled: settings.generationEnabled,
-      }).message)
-      return
+    setBusy(true)
+    setStatus(null)
+    setLastRequest(null)
+    try {
+      const { generationRequestService } = await import('../services/generationRequestService.js')
+      const result = await generationRequestService.submit({ prompt, categoryId })
+      setLastRequest(result)
+      setStatus({ tone: 'info', message: result.message })
+    } catch (error) {
+      setStatus({
+        tone: error?.code === 'quota_exceeded' ? 'warning' : 'danger',
+        message: error?.safe ? error.message : 'Your request could not be submitted. Please try again.',
+      })
+    } finally {
+      setBusy(false)
     }
-
-    setStatus(generationService.getStatus({
-      permissionState: user.permissionState,
-      generationEnabled: settings.generationEnabled,
-    }).message)
   }
 
   return (
@@ -38,7 +60,7 @@ function GeneratePage() {
       <PageHeading
         eyebrow="IMAGE STUDIO"
         title="Create an image"
-        description="Describe what you want to explore. Your prompt stays in this browser preview."
+        description="Describe what you want to explore. Requests are securely recorded for policy classification; image generation is not connected yet."
       />
       <div className="studio-grid">
         <form className="panel prompt-panel" onSubmit={handleGenerate}>
@@ -58,6 +80,18 @@ function GeneratePage() {
           />
           <div className="field-meta"><span>Be specific about subject, setting, and style.</span><span>{prompt.length} / {promptLimit}</span></div>
 
+          <label className="field-label category-select-label" htmlFor="image-category">Educational category</label>
+          <select
+            id="image-category"
+            className="auth-select category-select"
+            value={categoryId}
+            disabled={categoriesLoading || categories.length === 0}
+            onChange={(event) => setCategoryId(event.target.value)}
+          >
+            <option value="">{categoriesLoading ? 'Loading categories…' : 'No categories available'}</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+
           <fieldset className="ratio-fieldset">
             <legend><Ratio size={15} aria-hidden="true" /> Canvas shape</legend>
             <div className="segmented-control">
@@ -73,14 +107,15 @@ function GeneratePage() {
             </div>
           </fieldset>
 
-          <Notice>
-            No prompt is currently classified or submitted. Prohibited requests must remain blocked; founder approval cannot override provider safeguards or applicable law.
+          <Notice tone="warning">
+            Requests are stored as pending classification. The policy classifier and image model are not connected; no image is generated. Prohibited content must remain blocked and approval cannot override provider safeguards or law.
           </Notice>
-          <button className="button button-primary generate-button" type="submit" disabled={!prompt.trim()}>
-            <Sparkles size={17} aria-hidden="true" /> Generate image
+          {categoriesError && <p className="form-status error-status" role="alert">{categoriesError}</p>}
+          <button className="button button-primary generate-button" type="submit" disabled={!prompt.trim() || !categoryId || categoriesLoading || busy}>
+            <Sparkles size={17} aria-hidden="true" /> {busy ? 'Submitting request…' : 'Submit image request'}
           </button>
-          <p className="privacy-note"><LockKeyhole size={13} aria-hidden="true" /> No prompt is sent or stored in this preview.</p>
-          {status && <p className="form-status" role="status">{status}</p>}
+          <p className="privacy-note"><LockKeyhole size={13} aria-hidden="true" /> Your prompt is sent to the Privoraa request service and stored for policy processing.</p>
+          {status && <p className={`form-status ${status.tone === 'danger' ? 'error-status' : ''}`} role="status">{status.message}</p>}
         </form>
 
         <section className="panel preview-panel" aria-label="Image preview">
@@ -93,26 +128,30 @@ function GeneratePage() {
             <div className="canvas-placeholder">
               <span className="canvas-icon"><ImagePlus size={22} aria-hidden="true" /></span>
               <strong>Your canvas is waiting</strong>
-              <span>A model connection is needed to create an image.</span>
+              <span>Requests are recorded, but image generation is not connected yet.</span>
             </div>
           </div>
-          <div className="preview-footer"><span><span className="status-dot" /> Model connection pending</span><span>Preview only</span></div>
+          <div className="preview-footer"><span><span className="status-dot" /> Image model unavailable</span><span>No generated output</span></div>
         </section>
       </div>
 
       <section className="panel policy-flow-panel">
-        <div className="section-inline-heading"><div><span className="eyebrow">PLANNED SAFETY FLOW</span><h2>Policy review</h2></div><span className="subtle-label">Backend not connected</span></div>
+        <div className="section-inline-heading"><div><span className="eyebrow">REQUEST SAFETY</span><h2>Policy review</h2></div><span className="subtle-label">Classifier not connected</span></div>
         <div className="policy-flow-grid">
           <article className="policy-flow-item"><span className="policy-state policy-normal">Normal</span><p>Prompt → classification → automatic generation.</p></article>
           <article className="policy-flow-item"><span className="policy-state policy-restricted">Restricted</span><p>Prompt → classification → Founder approval queue → approve or reject.</p></article>
           <article className="policy-flow-item"><span className="policy-state policy-prohibited">Prohibited</span><p>Blocked. Cannot be approved or override provider safeguards or law.</p></article>
         </div>
-        <p className="policy-flow-disclaimer">This describes the intended backend workflow only. No prompt is classified or routed in this frontend.</p>
+        <p className="policy-flow-disclaimer">Requests remain pending until backend classification is available. No prompt is classified or sent to an image model by this frontend.</p>
       </section>
 
       <section className="panel recent-panel">
-        <div className="section-inline-heading"><div><span className="eyebrow">YOUR WORK</span><h2>Recent generations</h2></div><span className="subtle-label">This session</span></div>
-        <EmptyState title="Nothing created yet">When image generation is connected, your completed work will appear here.</EmptyState>
+        <div className="section-inline-heading"><div><span className="eyebrow">YOUR WORK</span><h2>Most recent request</h2></div><span className="subtle-label">No generated image</span></div>
+        {lastRequest ? (
+          <div className="request-receipt"><span className="badge badge-warning">Pending classification</span><p>{lastRequest.message}</p><small>Request ID: {lastRequest.requestId}</small></div>
+        ) : (
+          <EmptyState title="No request submitted yet">Submitted requests will appear here with their processing status. Images are not generated in this release.</EmptyState>
+        )}
       </section>
     </div>
   )

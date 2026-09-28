@@ -44,6 +44,7 @@ function AuthPage() {
       if (error?.code === 'email_confirmation_required') form.reset()
       setMessage(error?.safe ? error.message : 'Authentication could not be completed. Please try again.')
     } finally {
+      form.elements.password.value = ''
       setBusy(false)
     }
   }

@@ -1,6 +1,6 @@
 # Privoraa AI
 
-Privoraa AI is an educational image studio frontend. This MVP includes the responsive product shell, image prompt workspace, history and account screens, and a founder-area prototype. Image generation, authentication, policy classification, persistence, and server-enforced permissions are not connected yet.
+Privoraa AI is an educational image studio. The frontend uses Supabase Auth and profile-backed roles, stores generation requests through protected database RPCs, and loads Founder data through Founder-authorized services. Policy classification and image-model generation are not connected yet.
 
 ## Development
 
@@ -20,15 +20,15 @@ npm run build
 
 - `/` — Home
 - `/generate` — Prompt workspace and image preview
-- `/history` — Generation history placeholder
-- `/login` and `/register` — Authentication UI preview
-- `/profile` — Current demo session and logout
+- `/history` — The authenticated user's request history
+- `/login` and `/register` — Supabase email/password authentication
+- `/profile` — Authenticated account and logout
 - `/access-denied` — Friendly authorization feedback
 - `/founder` — Founder dashboard
-- `/founder/approvals` — Restricted-prompt review preview
-- `/founder/users` — User and permission controls preview
-- `/founder/activity` — Sample founder activity log
-- `/founder/settings` — Categories, limits, and generation switch preview
+- `/founder/approvals` — Founder-authorized restricted request review
+- `/founder/users` — Trusted profile role/permission controls
+- `/founder/activity` — Append-only audit activity
+- `/founder/settings` — Server-managed categories, limits, and generation switch
 
 ## Authentication boundary
 
@@ -38,6 +38,6 @@ Route guards only control frontend navigation. Roles, permission states, approva
 
 ## Integration boundaries
 
-The Generate action does not send or store prompts, classify them, or create images. Policy and generation service adapters currently report unavailable. The intended flow is normal prompt → classification → generation; restricted prompt → classification → founder approval/rejection; prohibited prompt → blocked. Founder approval must never bypass provider safeguards, platform policy, or applicable law. Classification, approval decisions, user permissions, limits, and logs must be enforced and persisted server-side.
+The Generate action sends a prompt and category to `submit_generation_request`, which derives identity from `auth.uid()`, checks the trusted profile, global switch, category, and daily quota, then stores an unclassified pending request. The policy classifier and image model are not connected, so no image is generated and a request remains pending classification. Future handling is normal → classification → generation; restricted → classification → Founder approval/rejection; prohibited → blocked. Founder approval cannot bypass provider safeguards, platform policy, or applicable law. User history is RLS-scoped; Founder reads/writes use database-checked authorization and protected RPCs, not direct client mutation.
 
-Founder queue records and user accounts are sample data held in memory for interface review only. They reset on refresh and do not represent real accounts or requests. No API keys or secret credentials belong in frontend code.
+Demo authentication and prototype data remain available only for explicit development/testing injection; they are not the default UI path. No API keys or secret credentials belong in frontend code.

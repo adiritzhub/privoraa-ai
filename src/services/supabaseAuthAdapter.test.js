@@ -138,6 +138,18 @@ test('metadata cannot grant Founder when the trusted profile is unavailable', as
   assert.equal(canAccessFounderArea(user), false)
 })
 
+test('invalid trusted roles and permission states fail closed', async () => {
+  for (const profile of [
+    { role: 'owner', permission_state: 'normal' },
+    { role: 'founder', permission_state: 'privileged' },
+    { role: null, permission_state: 'normal' },
+  ]) {
+    const user = await createSupabaseAuthAdapter(createFakeClient({ profile }).client).getCurrentUser()
+    assert.equal(canAccessWorkspace(user), false)
+    assert.equal(canAccessFounderArea(user), false)
+  }
+})
+
 test('session restoration uses getSession, getUser, and the RLS-protected profile query', async () => {
   const fake = createFakeClient()
   const user = await createSupabaseAuthAdapter(fake.client).getCurrentUser()
@@ -213,6 +225,9 @@ test('protected route decisions fail closed for signed-out, unknown, and suspend
   assert.equal(canAccessWorkspace(null), false)
   assert.equal(canAccessWorkspace({ role: 'user', permissionState: 'unknown' }), false)
   assert.equal(canAccessWorkspace({ role: 'user', permissionState: 'suspended' }), false)
+  assert.equal(canAccessWorkspace({ role: null, permissionState: 'normal' }), false)
+  assert.equal(canAccessWorkspace({ role: 'unexpected', permissionState: 'normal' }), false)
+  assert.equal(canAccessWorkspace({ role: 'user', permissionState: 'unexpected' }), false)
   assert.equal(canAccessWorkspace({ role: 'user', permissionState: 'normal' }), true)
   assert.equal(canAccessWorkspace({ role: 'user', permissionState: 'restricted' }), true)
   assert.equal(canAccessFounderArea({ role: 'founder', permissionState: 'normal' }), true)
@@ -228,10 +243,14 @@ test('frontend auth code does not write passwords to browser storage or contain 
     new URL('../lib/supabaseClient.js', import.meta.url),
   ]
   const sources = files.map((file) => readFileSync(file, 'utf8')).join('\n')
+  const providerSource = readFileSync(new URL('../context/AuthProvider.jsx', import.meta.url), 'utf8')
+  const authPageSource = readFileSync(new URL('../pages/AuthPage.jsx', import.meta.url), 'utf8')
 
   assert.doesNotMatch(sources, /(?:localStorage|sessionStorage)\s*\.\s*(?:setItem|set)\s*\([^)]*password/i)
   assert.doesNotMatch(sources, /sb_secret_[A-Za-z0-9_-]{12,}/)
   assert.doesNotMatch(sources, /service_role\s*[:=]/i)
+  assert.doesNotMatch(providerSource, /password/)
+  assert.match(authPageSource, /form\.elements\.password\.value = ''/)
 })
 
 test('Supabase auth is the provider default and SDK session persistence remains enabled', () => {
@@ -241,4 +260,19 @@ test('Supabase auth is the provider default and SDK session persistence remains 
   assert.match(providerSource, /import\('\.\.\/services\/supabaseAuthAdapter\.js'\)/)
   assert.match(clientSource, /autoRefreshToken:\s*true/)
   assert.match(clientSource, /persistSession:\s*true/)
+})
+
+test('self-promotion and self-unsuspension are denied by the existing Founder RPC boundary', () => {
+  const adapter = createSupabaseAuthAdapter(createFakeClient().client)
+  const migration = readFileSync(new URL('../../supabase/migrations/20260928120000_privoraa_foundation.sql', import.meta.url), 'utf8')
+  const accessRpcStart = migration.indexOf('CREATE OR REPLACE FUNCTION public.set_profile_access(')
+  const accessRpcEnd = migration.indexOf('$function$;', accessRpcStart)
+  const accessRpc = migration.slice(accessRpcStart, accessRpcEnd)
+
+  assert.equal(adapter.setProfileAccess, undefined)
+  assert.equal(adapter.updateProfile, undefined)
+  assert.match(accessRpc, /NOT public\.is_current_founder\(\)/)
+  assert.match(accessRpc, /p_target_user_id = v_actor_id/)
+  assert.match(migration, /REVOKE ALL ON TABLE[\s\S]*?public\.profiles[\s\S]*?FROM PUBLIC, anon, authenticated/)
+  assert.match(migration, /GRANT SELECT ON TABLE[\s\S]*?public\.profiles[\s\S]*?TO authenticated/)
 })
