@@ -2,7 +2,7 @@ import { useAppState } from '../hooks/useAppState.js'
 import { Badge, Notice, PageHeading } from '../components/Ui.jsx'
 
 function UsersPage() {
-  const { users, updateUserPermission, updateUserRole } = useAppState()
+  const { users, updateUserPermissionState, updateUserRole } = useAppState()
 
   return (
     <div className="page-stack">
@@ -11,15 +11,13 @@ function UsersPage() {
       <section className="panel table-panel">
         <div className="table-scroll">
           <table className="data-table user-table">
-            <thead><tr><th scope="col">User</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col">Can generate</th><th scope="col">Can request review</th></tr></thead>
+            <thead><tr><th scope="col">User</th><th scope="col">Role</th><th scope="col">Permission state</th></tr></thead>
             <tbody>
               {users.map((user) => (
                 <tr key={user.id}>
                   <td><div className="table-user"><span className="avatar avatar-small">{user.name.split(' ').map((part) => part[0]).join('')}</span><span><strong>{user.name}</strong><small>{user.email}</small></span></div></td>
-                  <td><label className="visually-hidden" htmlFor={`role-${user.id}`}>Role for {user.name}</label><select id={`role-${user.id}`} value={user.role} onChange={(event) => updateUserRole(user.id, event.target.value)}><option value="member">Member</option><option value="educator">Educator</option><option value="founder">Founder</option></select></td>
-                  <td><Badge tone={user.status === 'active' ? 'success' : 'neutral'}>{user.status}</Badge></td>
-                  <td><label className="check-control"><input type="checkbox" checked={user.permissions.generate} onChange={(event) => updateUserPermission(user.id, 'generate', event.target.checked)} /><span>Allowed</span></label></td>
-                  <td><label className="check-control"><input type="checkbox" checked={user.permissions.submitForReview} onChange={(event) => updateUserPermission(user.id, 'submitForReview', event.target.checked)} /><span>Allowed</span></label></td>
+                  <td><label className="visually-hidden" htmlFor={`role-${user.id}`}>Role for {user.name}</label><select id={`role-${user.id}`} value={user.role} onChange={(event) => updateUserRole(user.id, event.target.value)}><option value="user">User</option><option value="founder">Founder</option></select></td>
+                  <td><label className="visually-hidden" htmlFor={`permission-${user.id}`}>Permission state for {user.name}</label><select id={`permission-${user.id}`} value={user.permissionState} onChange={(event) => updateUserPermissionState(user.id, event.target.value)}><option value="normal">Normal</option><option value="restricted">Restricted</option><option value="suspended">Suspended</option></select></td>
                 </tr>
               ))}
             </tbody>

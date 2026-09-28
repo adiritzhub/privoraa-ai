@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import {
+  Activity,
   ChevronDown,
   CircleHelp,
   Clock3,
@@ -7,11 +8,14 @@ import {
   ImagePlus,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   Settings2,
   Sparkles,
+  UserRound,
   UsersRound,
 } from 'lucide-react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth.js'
 
 const workspaceLinks = [
   { to: '/', label: 'Home', icon: Home, end: true },
@@ -23,6 +27,7 @@ const founderLinks = [
   { to: '/founder', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/founder/approvals', label: 'Approvals', icon: ListChecks },
   { to: '/founder/users', label: 'Users', icon: UsersRound },
+  { to: '/founder/activity', label: 'Activity', icon: Activity },
   { to: '/founder/settings', label: 'Settings', icon: Settings2 },
 ]
 
@@ -37,6 +42,16 @@ function NavigationLink({ to, label, icon: Icon, end }) {
 
 function UserMenu() {
   const [open, setOpen] = useState(false)
+  const { user, authMode, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  async function handleSignOut() {
+    await signOut()
+    setOpen(false)
+    navigate('/')
+  }
+
+  const initial = user?.displayName?.slice(0, 1).toUpperCase() ?? 'G'
 
   return (
     <div className="user-menu-wrap">
@@ -47,14 +62,25 @@ function UserMenu() {
         aria-controls="user-menu"
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="avatar">G</span>
-        <span className="user-menu-label"><strong>Guest</strong><small>Preview workspace</small></span>
+        <span className="avatar">{initial}</span>
+        <span className="user-menu-label"><strong>{user?.displayName ?? 'Guest'}</strong><small>{user ? `${user.role} · ${user.permissionState}` : 'Not signed in'}</small></span>
         <ChevronDown size={15} aria-hidden="true" />
       </button>
       {open && (
         <div className="user-menu-popover" id="user-menu">
-          <Link to="/login" onClick={() => setOpen(false)}>Log in</Link>
-          <Link to="/register" onClick={() => setOpen(false)}>Create account</Link>
+          {user ? (
+            <>
+              <Link to="/profile" onClick={() => setOpen(false)}><UserRound size={15} aria-hidden="true" /> Profile</Link>
+              {user.role === 'founder' && <Link to="/founder" onClick={() => setOpen(false)}>Founder area</Link>}
+              <button type="button" onClick={handleSignOut}><LogOut size={15} aria-hidden="true" /> Log out</button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" onClick={() => setOpen(false)}>Log in</Link>
+              <Link to="/register" onClick={() => setOpen(false)}>Create account</Link>
+            </>
+          )}
+          <span className="menu-auth-mode">{authMode} session · UI only</span>
         </div>
       )}
     </div>
@@ -63,6 +89,7 @@ function UserMenu() {
 
 function AppLayout() {
   const location = useLocation()
+  const { authMode } = useAuth()
   const isFounder = location.pathname.startsWith('/founder')
 
   return (
@@ -97,6 +124,7 @@ function AppLayout() {
           </div>
           <div className="topbar-actions">
             <span className="model-status"><span /> Model not connected</span>
+            <span className="auth-mode-indicator">{authMode} auth</span>
             <UserMenu />
           </div>
         </header>

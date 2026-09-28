@@ -9,7 +9,7 @@ function ApprovalsPage() {
 
   function handleReview(id, decision) {
     reviewApproval(id, decision)
-    setFeedback(`Sample request marked ${decision}. No model was contacted.`)
+    setFeedback(`Sample request marked ${decision}. No model was contacted or request generated.`)
   }
 
   return (
@@ -22,10 +22,11 @@ function ApprovalsPage() {
           <article className="panel approval-card" key={item.id}>
             <div className="approval-card-top">
               <div className="approval-category"><span className="list-icon"><Clock3 size={17} aria-hidden="true" /></span><div><strong>{item.category}</strong><span>{item.name} · {item.submittedAt}</span></div></div>
+              <Badge tone={item.classification === 'prohibited' ? 'danger' : 'warning'}>{item.classification}</Badge>
               <Badge tone={item.status === 'pending' ? 'warning' : item.status === 'approved' ? 'success' : 'neutral'}>{item.status}</Badge>
             </div>
             <p className="approval-prompt">“{item.prompt}”</p>
-            {item.status === 'pending' ? (
+            {item.status === 'pending' && item.classification !== 'prohibited' ? (
               <div className="approval-actions">
                 <button className="button button-subtle-danger" type="button" onClick={() => handleReview(item.id, 'rejected')}><X size={15} aria-hidden="true" /> Reject</button>
                 <button className="button button-subtle-primary" type="button" onClick={() => handleReview(item.id, 'approved')}><Check size={15} aria-hidden="true" /> Approve sample</button>

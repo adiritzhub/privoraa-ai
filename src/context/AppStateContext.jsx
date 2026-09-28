@@ -12,21 +12,26 @@ export function AppStateProvider({ children }) {
   })
 
   function reviewApproval(id, status) {
+    if (!['approved', 'rejected'].includes(status)) return
     setApprovals((current) => current.map((item) => (
-      item.id === id ? { ...item, status } : item
+      item.id === id && !(status === 'approved' && item.classification === 'prohibited')
+        ? { ...item, status }
+        : item
     )))
   }
 
   function updateUserRole(id, role) {
+    if (!['user', 'founder'].includes(role)) return
     setUsers((current) => current.map((user) => (
       user.id === id ? { ...user, role } : user
     )))
   }
 
-  function updateUserPermission(id, permission, enabled) {
+  function updateUserPermissionState(id, permissionState) {
+    if (!['normal', 'restricted', 'suspended'].includes(permissionState)) return
     setUsers((current) => current.map((user) => (
       user.id === id
-        ? { ...user, permissions: { ...user.permissions, [permission]: enabled } }
+        ? { ...user, permissionState }
         : user
     )))
   }
@@ -47,7 +52,7 @@ export function AppStateProvider({ children }) {
       settings,
       reviewApproval,
       updateUserRole,
-      updateUserPermission,
+      updateUserPermissionState,
       setSettings,
       toggleCategory,
     }}>

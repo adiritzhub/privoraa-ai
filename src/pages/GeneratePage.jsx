@@ -1,19 +1,36 @@
 import { useState } from 'react'
 import { ImagePlus, LockKeyhole, Ratio, Sparkles } from 'lucide-react'
 import { EmptyState, Notice, PageHeading } from '../components/Ui.jsx'
+import { useAuth } from '../hooks/useAuth.js'
+import { useAppState } from '../hooks/useAppState.js'
 import { generationService } from '../services/generationService.js'
+import { policyService } from '../services/policyService.js'
 
 const promptLimit = 600
 const aspectRatios = ['Square', 'Portrait', 'Landscape']
 
 function GeneratePage() {
+  const { user } = useAuth()
+  const { settings } = useAppState()
   const [prompt, setPrompt] = useState('')
   const [aspectRatio, setAspectRatio] = useState('Square')
   const [status, setStatus] = useState('')
 
-  function handleGenerate(event) {
+  async function handleGenerate(event) {
     event.preventDefault()
-    setStatus(generationService.getStatus().message)
+    const classification = await policyService.classifyPrompt(prompt)
+    if (classification.status !== 'available') {
+      setStatus(generationService.getStatus({
+        permissionState: user.permissionState,
+        generationEnabled: settings.generationEnabled,
+      }).message)
+      return
+    }
+
+    setStatus(generationService.getStatus({
+      permissionState: user.permissionState,
+      generationEnabled: settings.generationEnabled,
+    }).message)
   }
 
   return (
@@ -57,7 +74,7 @@ function GeneratePage() {
           </fieldset>
 
           <Notice>
-            Prompts will be classified by a policy service once connected. Prohibited requests remain blocked; founder approval cannot override provider safeguards or law.
+            No prompt is currently classified or submitted. Prohibited requests must remain blocked; founder approval cannot override provider safeguards or applicable law.
           </Notice>
           <button className="button button-primary generate-button" type="submit" disabled={!prompt.trim()}>
             <Sparkles size={17} aria-hidden="true" /> Generate image
@@ -82,6 +99,16 @@ function GeneratePage() {
           <div className="preview-footer"><span><span className="status-dot" /> Model connection pending</span><span>Preview only</span></div>
         </section>
       </div>
+
+      <section className="panel policy-flow-panel">
+        <div className="section-inline-heading"><div><span className="eyebrow">PLANNED SAFETY FLOW</span><h2>Policy review</h2></div><span className="subtle-label">Backend not connected</span></div>
+        <div className="policy-flow-grid">
+          <article className="policy-flow-item"><span className="policy-state policy-normal">Normal</span><p>Prompt → classification → automatic generation.</p></article>
+          <article className="policy-flow-item"><span className="policy-state policy-restricted">Restricted</span><p>Prompt → classification → Founder approval queue → approve or reject.</p></article>
+          <article className="policy-flow-item"><span className="policy-state policy-prohibited">Prohibited</span><p>Blocked. Cannot be approved or override provider safeguards or law.</p></article>
+        </div>
+        <p className="policy-flow-disclaimer">This describes the intended backend workflow only. No prompt is classified or routed in this frontend.</p>
+      </section>
 
       <section className="panel recent-panel">
         <div className="section-inline-heading"><div><span className="eyebrow">YOUR WORK</span><h2>Recent generations</h2></div><span className="subtle-label">This session</span></div>
