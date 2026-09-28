@@ -1,0 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  font-family: 'DM Sans', 'Avenir Next', sans-serif;
+  color: #e9eff8;
+  background: #08111f;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
+  --ink: #08111f;
+  --surface: #0d1929;
+  --surface-raised: #111f32;
+  --surface-soft: #14243a;
+  --line: #203149;
+  --line-soft: #192a40;
+  --text: #e9eff8;
+  --text-muted: #91a1b7;
+  --text-dim: #64768e;
+  --purple: #a98bff;
+  --purple-soft: rgba(169, 139, 255, 0.13);
+  --cyan: #68d9e9;
+  --cyan-soft: rgba(104, 217, 233, 0.1);
+  --green: #7ce0b1;
+  --amber: #f2c17d;
+  --red: #ff909b;
+  --font-display: 'Space Grotesk', 'Avenir Next', sans-serif;
+  font-size: 15px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--ink);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  color: var(--ink);
+  background: var(--cyan);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
