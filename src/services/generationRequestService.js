@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabaseClient.js'
 import { createPolicyService } from './policyService.js'
 
 const categoryIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const requestIdPattern = categoryIdPattern
 
 const requestMessages = {
   invalid_request: 'Check the prompt and category, then try again.',
@@ -54,7 +55,56 @@ async function requireActiveUser(client) {
 }
 
 export function createGenerationRequestService(client = supabase, policy = createPolicyService(client)) {
+  async function getLatestGenerationSubmission() {
+    if (!client) throw createRequestError('service_unavailable')
+    await requireActiveUser(client)
+
+    const { data, error } = await client.rpc('get_latest_generation_submission')
+    if (error) throw createRequestError('service_unavailable')
+    if (data === null) return null
+    if (!data || typeof data !== 'object'
+      || !requestIdPattern.test(data.requestId ?? '')
+      || !requestIdPattern.test(data.idempotencyKey ?? '')
+      || (data.categoryId !== null && !categoryIdPattern.test(data.categoryId ?? ''))
+      || typeof data.prompt !== 'string'
+      || typeof data.requestState !== 'string') {
+      throw createRequestError('service_unavailable')
+    }
+    return data
+  }
+
+  async function getGenerationImageUrl(requestId) {
+    if (!client || !requestIdPattern.test(requestId ?? '') || typeof client?.functions?.invoke !== 'function') {
+      throw createRequestError('service_unavailable')
+    }
+    await requireActiveUser(client)
+
+    const { data, error } = await client.functions.invoke('get-generation-image', {
+      body: { requestId },
+    })
+    if (error || data?.success !== true || typeof data.imageUrl !== 'string') {
+      throw createRequestError('service_unavailable')
+    }
+    return data.imageUrl
+  }
+
+  async function getGenerationStatus(requestId) {
+    if (!client || !requestIdPattern.test(requestId ?? '') || typeof client?.functions?.invoke !== 'function') {
+      throw createRequestError('service_unavailable')
+    }
+    await requireActiveUser(client)
+
+    const { data, error } = await client.functions.invoke('generate-image', {
+      body: { requestId, statusOnly: true },
+    })
+    if (error || data?.success !== true || typeof data.status !== 'string') {
+      throw createRequestError('service_unavailable')
+    }
+    return { status: data.status, message: data.message ?? 'Generation request status recovered.' }
+  }
+
   return {
+    getLatestGenerationSubmission,
     async listAvailableCategories() {
       if (!client) throw createRequestError('service_unavailable')
       await requireActiveUser(client)
@@ -85,11 +135,18 @@ export function createGenerationRequestService(client = supabase, policy = creat
       return data ?? []
     },
 
-    async submit({ prompt, categoryId }) {
+    getGenerationImageUrl,
+    getGenerationStatus,
+
+    async submit({ prompt, categoryId, idempotencyKey }) {
       if (typeof prompt !== 'string' || prompt.trim().length < 1 || prompt.trim().length > 6000) {
         throw createRequestError('invalid_request')
       }
       if (typeof categoryId !== 'string' || !categoryIdPattern.test(categoryId)) {
+        throw createRequestError('invalid_request')
+      }
+      const submissionKey = idempotencyKey ?? globalThis.crypto?.randomUUID?.()
+      if (typeof submissionKey !== 'string' || !requestIdPattern.test(submissionKey)) {
         throw createRequestError('invalid_request')
       }
       if (!client) throw createRequestError('service_unavailable')
@@ -114,7 +171,8 @@ export function createGenerationRequestService(client = supabase, policy = creat
 
       if (categoryError || !category) throw createRequestError('category_unavailable')
 
-      const { data: requestId, error: rpcError } = await client.rpc('submit_generation_request', {
+      const { data: requestId, error: rpcError } = await client.rpc('submit_generation_request_idempotent', {
+        p_idempotency_key: submissionKey,
         p_category_id: categoryId,
         p_prompt: prompt.trim(),
       })
@@ -130,10 +188,65 @@ export function createGenerationRequestService(client = supabase, policy = creat
         throw createRequestError('policy_unavailable')
       }
 
-      return {
-        requestId,
-        ...policyResult,
+      const baseResult = { requestId, ...policyResult }
+      const canResumeGeneration = (policyResult.classification === 'allowed'
+        && ['eligible', 'processing', 'completed'].includes(policyResult.state))
+        || (policyResult.classification === 'restricted'
+          && ['approved', 'processing', 'completed'].includes(policyResult.state))
+      if (!canResumeGeneration) {
+        return policyResult.state === 'failed'
+          ? { ...baseResult, status: 'failed', errorCode: 'provider_unavailable' }
+          : baseResult
       }
+      if (typeof client?.functions?.invoke !== 'function') {
+        return baseResult
+      }
+
+      const invocationFailure = {
+        ...baseResult,
+        status: 'failed',
+        errorCode: 'provider_unavailable',
+        message: 'Image generation is temporarily unavailable. Please try again later.',
+      }
+
+      try {
+        const generationResponse = await client.functions.invoke('generate-image', {
+          body: { requestId },
+        })
+        if (generationResponse?.error) return invocationFailure
+
+        const data = generationResponse?.data ?? generationResponse
+        if (data && typeof data === 'object' && data.success === true) {
+          let imageUrl = data.imageUrl ?? null
+          if (data.status === 'completed' && !imageUrl) {
+            try {
+              imageUrl = await getGenerationImageUrl(requestId)
+            } catch {
+              imageUrl = null
+            }
+          }
+          return {
+            ...baseResult,
+            status: data.status ?? 'completed',
+            providerRequestId: data.providerRequestId ?? null,
+            outputReference: imageUrl,
+            safeMetadata: data.safeMetadata ?? {},
+            message: data.message ?? (imageUrl ? 'Image generated and stored successfully.' : baseResult.message),
+          }
+        }
+        if (data && typeof data === 'object' && data.success === false) {
+          return {
+            ...baseResult,
+            status: 'failed',
+            errorCode: data.errorCode ?? 'service_unavailable',
+            message: data.message ?? baseResult.message,
+          }
+        }
+      } catch {
+        return invocationFailure
+      }
+
+      return invocationFailure
     },
   }
 }
